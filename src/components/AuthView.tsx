@@ -1,0 +1,212 @@
+import React, { useState } from 'react';
+import {
+  Lock,
+  Mail,
+  User,
+  ShieldAlert,
+  ArrowRight,
+  Settings,
+} from 'lucide-react';
+import { loginUser, registerUser } from '../firebase/service.ts';
+import { isFirebaseActive } from '../firebase/config.ts';
+
+interface AuthViewProps {
+  onAuthSuccess: () => void;
+  logoUrl?: string | null;
+}
+
+export const AuthView: React.FC<AuthViewProps> = ({ onAuthSuccess, logoUrl }) => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        if (!email.trim() || !password.trim()) {
+          throw new Error('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+        }
+        await loginUser(email.trim(), password);
+      } else {
+        if (!fullName.trim()) {
+          throw new Error('Vui lòng nhập Họ và Tên thật để lưu vào hồ sơ trường.');
+        }
+        if (!email.trim() || !password.trim()) {
+          throw new Error('Vui lòng nhập Email và Mật khẩu.');
+        }
+        if (password.length < 6) {
+          throw new Error('Mật khẩu cần tối thiểu 6 ký tự.');
+        }
+        await registerUser(email.trim(), password, fullName.trim(), 'student');
+      }
+      onAuthSuccess();
+    } catch (err: any) {
+      console.error('Auth error:', err);
+      let msg = err.message || 'Đã có lỗi xảy ra trong quá trình xác thực.';
+      if (msg.includes('api-key-not-valid') || msg.includes('auth/api-key-not-valid')) {
+        msg = 'Lỗi API Key Firebase (auth/api-key-not-valid): Google Cloud chưa cấp quyền Identity Toolkit API cho Key của dự án esp32-test-36152.';
+      } else if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password')) {
+        msg = 'Email hoặc mật khẩu không chính xác.';
+      } else if (msg.includes('auth/user-not-found')) {
+        msg = 'Không tìm thấy tài khoản với email này. Vui lòng chuyển sang tab Đăng ký.';
+      } else if (msg.includes('auth/email-already-in-use')) {
+        msg = 'Email này đã được đăng ký. Vui lòng chuyển sang Đăng nhập.';
+      } else if (msg.includes('auth/weak-password')) {
+        msg = 'Mật khẩu quá yếu, cần ít nhất 6 ký tự.';
+      } else if (msg.includes('auth/operation-not-allowed')) {
+        msg = 'Phương thức đăng nhập Email/Mật khẩu chưa được Bật trong Firebase Console (Authentication > Sign-in method).';
+      }
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-50 via-indigo-50/40 to-slate-100">
+      <div className="max-w-md w-full space-y-6">
+        {/* Header Icon & Title */}
+        <div className="text-center space-y-2">
+          {logoUrl ? (
+            <div className="inline-flex w-16 h-16 p-1.5 rounded-2xl bg-white border border-slate-200/80 shadow-lg shadow-orange-100 overflow-hidden items-center justify-center">
+              <img src={logoUrl} alt="Logo" className="w-full h-full object-contain rounded-xl" />
+            </div>
+          ) : (
+            <div className="inline-flex p-3 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-yellow-400 text-white shadow-lg shadow-orange-200 text-3xl">
+              🐱⚡
+            </div>
+          )}
+          <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            Mèo Nghiện Điện
+          </h2>
+          <p className="text-sm font-semibold text-amber-700">
+            Ôn Thi & Kiểm Tra Công Nghệ Công Nghiệp
+          </p>
+          <p className="text-xs text-slate-500">
+            Đề thi trắc nghiệm & Đúng/Sai chuẩn GDPT mới nhất
+          </p>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-200/80 overflow-hidden">
+          {/* Tab Selector */}
+          <div className="grid grid-cols-2 p-1.5 bg-slate-100/80 border-b border-slate-200 text-sm font-semibold">
+            <button
+              type="button"
+              onClick={() => { setIsLogin(true); setError(null); }}
+              className={`py-2.5 rounded-xl transition ${
+                isLogin
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Đăng nhập
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsLogin(false); setError(null); }}
+              className={`py-2.5 rounded-xl transition ${
+                !isLogin
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Đăng ký tài khoản
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-4">
+            {error && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium flex items-start gap-2 animate-in fade-in">
+                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* If Register: Full name only, role defaults to student */}
+            {!isLogin && (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Họ và Tên thật <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Ví dụ: Nguyễn Văn An"
+                    className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Tài khoản đăng ký mặc định là <strong>Học sinh</strong>. Quyền Giáo viên sẽ được kích hoạt trực tiếp từ Firestore Database.
+                </p>
+              </div>
+            )}
+
+            {/* Email */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Email trường học <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="giaovien@school.edu.vn hoặc hocsinh@thpt.edu.vn"
+                  className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Mật khẩu <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                />
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-200 transition duration-150 flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <span>{isLogin ? 'Đăng nhập vào hệ thống' : 'Đăng ký tài khoản mới'}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
