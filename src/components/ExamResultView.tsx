@@ -202,33 +202,40 @@ export const ExamResultView: React.FC<ExamResultViewProps> = ({
                   {item.type === 'multiple_choice' && (
                     <div className="space-y-2">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        {item.options?.map((opt) => {
-                          const isUserAnswer = item.userAnswer === opt.id;
-                          const isCorrectAnswer = item.correctAnswer === opt.id;
+                        {item.options
+                          ?.slice()
+                          .sort((a, b) => {
+                            const map: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, a: 1, b: 2, c: 3, d: 4 };
+                            return (map[String(a.id || '').toUpperCase()] || 99) - (map[String(b.id || '').toUpperCase()] || 99);
+                          })
+                          .map((opt, optIdx) => {
+                            const isUserAnswer = item.userAnswer === opt.id;
+                            const isCorrectAnswer = item.correctAnswer === opt.id;
+                            const letterBadge = ['A', 'B', 'C', 'D'][optIdx] || opt.id;
 
-                          let badgeClass = 'border-slate-200 bg-white text-slate-700';
-                          if (isCorrectAnswer) {
-                            badgeClass = 'border-emerald-400 bg-emerald-50 text-emerald-950 font-semibold ring-1 ring-emerald-400';
-                          } else if (isUserAnswer && !item.isCorrect) {
-                            badgeClass = 'border-rose-400 bg-rose-50 text-rose-950 font-semibold ring-1 ring-rose-400';
-                          }
+                            let badgeClass = 'border-slate-200 bg-white text-slate-700';
+                            if (isCorrectAnswer) {
+                              badgeClass = 'border-emerald-400 bg-emerald-50 text-emerald-950 font-semibold ring-1 ring-emerald-400';
+                            } else if (isUserAnswer && !item.isCorrect) {
+                              badgeClass = 'border-rose-400 bg-rose-50 text-rose-950 font-semibold ring-1 ring-rose-400';
+                            }
 
-                          return (
-                            <div
-                              key={opt.id}
-                              className={`p-3 rounded-2xl border flex items-center gap-2.5 ${badgeClass}`}
-                            >
+                            return (
                               <div
-                                className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 ${
-                                  isCorrectAnswer
-                                    ? 'bg-emerald-600 text-white'
-                                    : isUserAnswer
-                                    ? 'bg-rose-600 text-white'
-                                    : 'bg-slate-100 text-slate-600'
-                                }`}
+                                key={opt.id || optIdx}
+                                className={`p-3 rounded-2xl border flex items-center gap-2.5 ${badgeClass}`}
                               >
-                                {opt.id}
-                              </div>
+                                <div
+                                  className={`w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 ${
+                                    isCorrectAnswer
+                                      ? 'bg-emerald-600 text-white'
+                                      : isUserAnswer
+                                      ? 'bg-rose-600 text-white'
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  {letterBadge}
+                                </div>
                               <span className="flex-1 text-xs">{opt.text}</span>
                               {isCorrectAnswer && (
                                 <span className="text-[10px] font-extrabold uppercase bg-emerald-600 text-white px-1.5 py-0.5 rounded">

@@ -496,41 +496,48 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
 
                           {isOptionExpanded && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2.5 p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs animate-in fade-in duration-150">
-                              {item.options.map((opt) => {
-                                const isOfficial = opt.id === item.correctAnswer;
-                                const isChosen = opt.id === item.userAnswer;
-                                return (
-                                  <div
-                                    key={opt.id}
-                                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
-                                      isOfficial
-                                        ? 'bg-emerald-50 border-emerald-300 font-bold text-emerald-950'
-                                        : isChosen
-                                        ? 'bg-rose-50 border-rose-300 font-semibold text-rose-950'
-                                        : 'bg-white border-slate-200 text-slate-700'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <span
-                                        className={`w-5 h-5 rounded-md font-bold text-xs flex items-center justify-center shrink-0 ${
-                                          isOfficial
-                                            ? 'bg-emerald-600 text-white'
-                                            : isChosen
-                                            ? 'bg-rose-600 text-white'
-                                            : 'bg-slate-200 text-slate-700'
-                                        }`}
-                                      >
-                                        {opt.id}
-                                      </span>
-                                      <span className="truncate">{opt.text}</span>
+                              {item.options
+                                ?.slice()
+                                .sort((a, b) => {
+                                  const map: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, a: 1, b: 2, c: 3, d: 4 };
+                                  return (map[String(a.id || '').toUpperCase()] || 99) - (map[String(b.id || '').toUpperCase()] || 99);
+                                })
+                                .map((opt, optIdx) => {
+                                  const isOfficial = opt.id === item.correctAnswer;
+                                  const isChosen = opt.id === item.userAnswer;
+                                  const letterBadge = ['A', 'B', 'C', 'D'][optIdx] || opt.id;
+                                  return (
+                                    <div
+                                      key={opt.id || optIdx}
+                                      className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                                        isOfficial
+                                          ? 'bg-emerald-50 border-emerald-300 font-bold text-emerald-950'
+                                          : isChosen
+                                          ? 'bg-rose-50 border-rose-300 font-semibold text-rose-950'
+                                          : 'bg-white border-slate-200 text-slate-700'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span
+                                          className={`w-5 h-5 rounded-md font-bold text-xs flex items-center justify-center shrink-0 ${
+                                            isOfficial
+                                              ? 'bg-emerald-600 text-white'
+                                              : isChosen
+                                              ? 'bg-rose-600 text-white'
+                                              : 'bg-slate-200 text-slate-700'
+                                          }`}
+                                        >
+                                          {letterBadge}
+                                        </span>
+                                        <span className="truncate">{opt.text}</span>
+                                      </div>
+                                      <div className="shrink-0 text-[10px] font-bold">
+                                        {isOfficial && <span className="text-emerald-700">Đáp án đúng</span>}
+                                        {isChosen && !isOfficial && <span className="text-rose-700">Học sinh chọn</span>}
+                                      </div>
                                     </div>
-                                    <div className="shrink-0 text-[10px] font-bold">
-                                      {isOfficial && <span className="text-emerald-700">Đáp án đúng</span>}
-                                      {isChosen && !isOfficial && <span className="text-rose-700">Học sinh chọn</span>}
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
                             </div>
                           )}
                         </div>

@@ -49,31 +49,52 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize randomized questions
+  // Initialize randomized questions:
+  // - Đảo ngẫu nhiên câu hỏi trắc nghiệm 4 lựa chọn (Phần I, câu 1 đến 24)
+  // - 4 câu hỏi Đúng/Sai LUÔN LUÔN Ở CUỐI (Phần II, tức chỉ ở 4 câu từ 25 đến 28)
+  // - Các phương án lựa chọn giữ đúng 100% trật tự A, B, C, D
   useEffect(() => {
-    // Clone questions
-    const qList = [...(exam.questions || [])];
+    const allQuestions = [...(exam.questions || [])];
 
-    // Fisher-Yates shuffle
-    for (let i = qList.length - 1; i > 0; i--) {
+    // Tách riêng 2 nhóm câu hỏi
+    const mcQuestions = allQuestions.filter((q) => q.type === 'multiple_choice');
+    const tfQuestions = allQuestions.filter((q) => q.type === 'true_false');
+    const otherQuestions = allQuestions.filter(
+      (q) => q.type !== 'multiple_choice' && q.type !== 'true_false'
+    );
+
+    // Đảo ngẫu nhiên các câu hỏi trắc nghiệm nhiều lựa chọn (Fisher-Yates shuffle)
+    const shuffledMC = [...mcQuestions];
+    for (let i = shuffledMC.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [qList[i], qList[j]] = [qList[j], qList[i]];
+      [shuffledMC[i], shuffledMC[j]] = [shuffledMC[j], shuffledMC[i]];
     }
 
-    // For multiple choice questions, optionally shuffle options while preserving IDs
-    const randomized = qList.map((q) => {
-      if (q.type === 'multiple_choice' && q.options) {
-        const opts = [...q.options];
-        for (let i = opts.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [opts[i], opts[j]] = [opts[j], opts[i]];
-        }
-        return { ...q, options: opts };
+    // Đảo thứ tự giữa 4 câu Đúng/Sai với nhau nhưng LUÔN LUÔN ĐẶT Ở CUỐI BÀI THI
+    const shuffledTF = [...tfQuestions];
+    for (let i = shuffledTF.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledTF[i], shuffledTF[j]] = [shuffledTF[j], shuffledTF[i]];
+    }
+
+    // Ghép theo đúng quy chuẩn: Trắc nghiệm 4 lựa chọn trước, 4 câu Đúng/Sai LUÔN LUÔN Ở CUỐI (câu 25 - 28)
+    const combined = [...shuffledMC, ...otherQuestions, ...shuffledTF];
+
+    // Đảm bảo trong từng câu trắc nghiệm, các phương án LUÔN GIỮ ĐÚNG TRẬT TỰ A, B, C, D
+    const orderMap: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, a: 1, b: 2, c: 3, d: 4 };
+    const finalizedQuestions = combined.map((q) => {
+      if (q.type === 'multiple_choice' && q.options && Array.isArray(q.options)) {
+        const sortedOpts = [...q.options].sort((a, b) => {
+          const rankA = orderMap[String(a.id || '').toUpperCase()] || 99;
+          const rankB = orderMap[String(b.id || '').toUpperCase()] || 99;
+          return rankA - rankB;
+        });
+        return { ...q, options: sortedOpts };
       }
       return q;
     });
 
-    setShuffledQuestions(randomized);
+    setShuffledQuestions(finalizedQuestions);
   }, [exam]);
 
   // Timer countdown
@@ -150,7 +171,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
       );
 
       // Direct client-side standardized grading (supports static GitHub Pages)
-      const gradeResult = gradeExam(exam.questions, answers, timeSpent);
+      const gradeResult = gradeExam(shuffledQuestions, answers, timeSpent);
 
       // Fire celebratory confetti for achievement
       try {
@@ -310,11 +331,12 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 gap-3">
-                    {currentQuestion.options?.map((option) => {
+                    {currentQuestion.options?.map((option, optIdx) => {
                       const isSelected = answers[currentQuestion.id] === option.id;
+                      const letterBadge = ['A', 'B', 'C', 'D'][optIdx] || option.id;
                       return (
                         <button
-                          key={option.id}
+                          key={option.id || optIdx}
                           type="button"
                           onClick={() => handleSelectOption(currentQuestion.id, option.id)}
                           className={`w-full p-4 rounded-2xl border text-left transition-all duration-150 flex items-center gap-3.5 cursor-pointer ${
@@ -330,7 +352,7 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
                                 : 'bg-slate-100 text-slate-600'
                             }`}
                           >
-                            {option.id}
+                            {letterBadge}
                           </div>
                           <span className="text-sm leading-normal flex-1">{option.text}</span>
                         </button>
@@ -446,35 +468,114 @@ export const ExamRunner: React.FC<ExamRunnerProps> = ({
             </h3>
 
             {/* Question Squares Matrix Grid */}
-            <div className="grid grid-cols-5 sm:grid-cols-6 lg:grid-cols-5 gap-2.5">
-              {shuffledQuestions.map((q, idx) => {
-                const isAnswered = isQuestionAnswered(q);
-                const isCurrent = idx === currentIndex;
+            {shuffledQuestions.some((q) => q.type === 'multiple_choice') &&
+            shuffledQuestions.some((q) => q.type === 'true_false') ? (
+              <div className="space-y-4">
+                {/* Phần I: Trắc nghiệm nhiều lựa chọn */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider pb-1 border-b border-slate-100">
+                    <span>Phần I: 4 Lựa chọn (A, B, C, D)</span>
+                    <span className="text-indigo-600 font-extrabold">
+                      Câu 1 - {shuffledQuestions.filter((q) => q.type === 'multiple_choice').length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-5 sm:grid-cols-6 lg:grid-cols-5 gap-2.5">
+                    {shuffledQuestions.map((q, idx) => {
+                      if (q.type !== 'multiple_choice') return null;
+                      const isAnswered = isQuestionAnswered(q);
+                      const isCurrent = idx === currentIndex;
 
-                // Color coding per requirement:
-                // - Đã làm: Xanh lá (bg-emerald-500 text-white)
-                // - Đang xem: Viền đậm (ring-2 ring-indigo-600 border-indigo-600)
-                // - Chưa làm: Trắng (bg-white border-slate-200 text-slate-700)
-                let colorClass = 'bg-white border-slate-200 text-slate-700 hover:border-slate-300';
-                if (isAnswered) {
-                  colorClass = 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-xs';
-                }
-                if (isCurrent) {
-                  colorClass += ' ring-2 ring-indigo-600 ring-offset-2 border-indigo-600 scale-105';
-                }
+                      let colorClass = 'bg-white border-slate-200 text-slate-700 hover:border-slate-300';
+                      if (isAnswered) {
+                        colorClass = 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-xs';
+                      }
+                      if (isCurrent) {
+                        colorClass += ' ring-2 ring-indigo-600 ring-offset-2 border-indigo-600 scale-105';
+                      }
 
-                return (
-                  <button
-                    key={q.id || idx}
-                    type="button"
-                    onClick={() => setCurrentIndex(idx)}
-                    className={`h-10 rounded-xl border text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${colorClass}`}
-                  >
-                    {idx + 1}
-                  </button>
-                );
-              })}
-            </div>
+                      return (
+                        <button
+                          key={q.id || idx}
+                          type="button"
+                          onClick={() => setCurrentIndex(idx)}
+                          className={`h-10 rounded-xl border text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${colorClass}`}
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Phần II: Đúng / Sai - LUÔN LUÔN Ở CUỐI (Câu 25 đến 28) */}
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-purple-700 uppercase tracking-wider pb-1 border-b border-purple-100">
+                    <span className="flex items-center gap-1.5">
+                      <span>Phần II: Đúng / Sai</span>
+                      <span className="text-[9px] px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded-full font-black">
+                        4 câu cuối
+                      </span>
+                    </span>
+                    <span className="font-extrabold text-purple-800">
+                      Câu {shuffledQuestions.findIndex((q) => q.type === 'true_false') + 1} - {totalQuestions}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2.5">
+                    {shuffledQuestions.map((q, idx) => {
+                      if (q.type !== 'true_false') return null;
+                      const isAnswered = isQuestionAnswered(q);
+                      const isCurrent = idx === currentIndex;
+
+                      let colorClass = 'bg-purple-50/60 border-purple-200 text-purple-900 hover:border-purple-300';
+                      if (isAnswered) {
+                        colorClass = 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-xs';
+                      }
+                      if (isCurrent) {
+                        colorClass += ' ring-2 ring-purple-600 ring-offset-2 border-purple-600 scale-105';
+                      }
+
+                      return (
+                        <button
+                          key={q.id || idx}
+                          type="button"
+                          onClick={() => setCurrentIndex(idx)}
+                          className={`h-10 rounded-xl border text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${colorClass}`}
+                          title={`Câu ${idx + 1}: Đúng / Sai 4 ý`}
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-5 sm:grid-cols-6 lg:grid-cols-5 gap-2.5">
+                {shuffledQuestions.map((q, idx) => {
+                  const isAnswered = isQuestionAnswered(q);
+                  const isCurrent = idx === currentIndex;
+
+                  let colorClass = 'bg-white border-slate-200 text-slate-700 hover:border-slate-300';
+                  if (isAnswered) {
+                    colorClass = 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-xs';
+                  }
+                  if (isCurrent) {
+                    colorClass += ' ring-2 ring-indigo-600 ring-offset-2 border-indigo-600 scale-105';
+                  }
+
+                  return (
+                    <button
+                      key={q.id || idx}
+                      type="button"
+                      onClick={() => setCurrentIndex(idx)}
+                      className={`h-10 rounded-xl border text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${colorClass}`}
+                    >
+                      {idx + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Legend */}
             <div className="pt-3 border-t border-slate-100 space-y-2 text-[11px] text-slate-500 font-medium">

@@ -62,6 +62,38 @@ export interface ExamGenerationResult {
 }
 
 /**
+ * Chuẩn hóa danh sách câu hỏi:
+ * - Trắc nghiệm 4 lựa chọn đặt trước (Phần I)
+ * - 4 câu Đúng/Sai LUÔN LUÔN Ở CUỐI (Phần II)
+ * - Các phương án lựa chọn giữ đúng 100% trật tự A, B, C, D
+ */
+export function normalizeExamQuestions(rawQuestions: any[]): Question[] {
+  const orderMap: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, a: 1, b: 2, c: 3, d: 4 };
+
+  const mapped = rawQuestions.map((q: any, i: number) => {
+    const normalized: Question = {
+      ...q,
+      id: q.id || `q_${Date.now()}_${i + 1}`,
+    };
+    if (normalized.type === 'multiple_choice' && normalized.options && Array.isArray(normalized.options)) {
+      const sortedOpts = [...normalized.options].sort((a, b) => {
+        const rankA = orderMap[String(a.id || '').toUpperCase()] || 99;
+        const rankB = orderMap[String(b.id || '').toUpperCase()] || 99;
+        return rankA - rankB;
+      });
+      normalized.options = sortedOpts;
+    }
+    return normalized;
+  });
+
+  const mc = mapped.filter((q) => q.type === 'multiple_choice');
+  const tf = mapped.filter((q) => q.type === 'true_false');
+  const others = mapped.filter((q) => q.type !== 'multiple_choice' && q.type !== 'true_false');
+
+  return [...mc, ...others, ...tf];
+}
+
+/**
  * Helper to call Gemini generateContent with primary model (gemini-3.8-flash)
  * and fallback to (gemini-flash-latest) if model is not found.
  */
@@ -174,10 +206,7 @@ Trả về DUY NHẤT một đối tượng JSON hợp lệ (không kèm markdow
       const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleanJson);
       if (parsed.questions && Array.isArray(parsed.questions)) {
-        parsed.questions = parsed.questions.map((q: any, i: number) => ({
-          ...q,
-          id: q.id || `q_${Date.now()}_${i + 1}`,
-        }));
+        parsed.questions = normalizeExamQuestions(parsed.questions);
       }
       return parsed;
     } catch (e) {
@@ -339,10 +368,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm backticks markd
       const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleanJson);
       if (parsed.questions && Array.isArray(parsed.questions)) {
-        parsed.questions = parsed.questions.map((q: any, i: number) => ({
-          ...q,
-          id: q.id || `q_${Date.now()}_${i + 1}`,
-        }));
+        parsed.questions = normalizeExamQuestions(parsed.questions);
       }
       return parsed;
     } catch (parseErr) {

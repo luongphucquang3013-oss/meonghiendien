@@ -432,6 +432,26 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
     setIsSaving(true);
     try {
+      // Đảm bảo cấu trúc đề thi chuẩn: Trắc nghiệm 4 lựa chọn ở trước, câu Đúng/Sai LUÔN LUÔN Ở CUỐI
+      const orderMap: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, a: 1, b: 2, c: 3, d: 4 };
+      const normalizedQuestions = [
+        ...questions
+          .filter((q) => q.type === 'multiple_choice')
+          .map((q) => {
+            if (q.options && Array.isArray(q.options)) {
+              const sortedOpts = [...q.options].sort((a, b) => {
+                const rankA = orderMap[String(a.id || '').toUpperCase()] || 99;
+                const rankB = orderMap[String(b.id || '').toUpperCase()] || 99;
+                return rankA - rankB;
+              });
+              return { ...q, options: sortedOpts };
+            }
+            return q;
+          }),
+        ...questions.filter((q) => q.type !== 'multiple_choice' && q.type !== 'true_false'),
+        ...questions.filter((q) => q.type === 'true_false'),
+      ];
+
       const examToSave: Exam = {
         id: editingExamId || `exam_${Date.now()}`,
         title: examTitle.trim(),
@@ -442,7 +462,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         teacherId: currentUser.uid,
         teacherName: currentUser.fullName || 'Giáo viên',
         status: 'published',
-        questions,
+        questions: normalizedQuestions,
         createdAt: editingExamId
           ? exams.find((e) => e.id === editingExamId)?.createdAt || new Date().toISOString()
           : new Date().toISOString(),
